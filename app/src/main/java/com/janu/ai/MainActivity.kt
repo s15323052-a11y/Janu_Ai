@@ -2,6 +2,8 @@ package com.janu.ai
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -11,6 +13,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,20 +24,17 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
-    private var speakReply by mutableStateOf("मुझे सुनने के लिए बटन दबाएँ।")
+    private var input by mutableStateOf("")
+    private var status by mutableStateOf("नमस्ते! मैं JANU हूँ। नीचे लिखें या माइक दबाकर बोलें।")
+    private val conversation = mutableStateListOf("JANU: नमस्ते! मैं आपकी बात सुनने के लिए तैयार हूँ।")
+
     private val speechLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            val words = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val heard = words?.firstOrNull().orEmpty()
-            if (heard.isNotBlank()) {
-                speakReply = "आपने कहा: $heard"
-                tts?.language = if (heard.any { it.code in 0x0900..0x097F }) Locale("hi", "IN") else Locale.US
-                tts?.speak(speakReply, TextToSpeech.QUEUE_FLUSH, null, "janu_reply")
-            }
+            input = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
         }
     }
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startListening() else speakReply = "माइक्रोफोन की अनुमति नहीं मिली।"
+        if (granted) startListening() else status = "माइक्रोफोन अनुमति नहीं मिली।"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,22 +43,62 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxSize().padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("नमस्ते! मैं JANU हूँ", style = MaterialTheme.typography.headlineMedium)
-                        Text("Hindi और English voice assistant", Modifier.padding(top = 12.dp))
-                        Button(onClick = {
-                            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
-                            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }, Modifier.padding(top = 24.dp)) { Text("🎙 बोलना शुरू करें") }
-                        Text(speakReply, Modifier.padding(top = 20.dp))
-                        Text("यह शुरुआती voice input और बोलकर जवाब देने का परीक्षण है। AI जवाब, wake-word और reminders अगले integration चरण में जुड़ेंगे।",
-                            Modifier.padding(top = 20.dp), style = MaterialTheme.typography.bodySmall)
+                    Column(Modifier.fillMaxSize().padding(20.dp)) {
+                        Text("JANU AI", style = MaterialTheme.typography.headlineLarge)
+                        Text("हिंदी और English voice assistant", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(12.dp))
+                        Text(status, style = MaterialTheme.typography.bodySmall)
+                        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp)) {
+                            items(conversation) { line ->
+                                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text(line, Modifier.padding(12.dp))
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { input = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("अपना संदेश लिखें") },
+                            placeholder = { Text("जैसे: नमस्ते Janu") }
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
+                                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
+                                else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }, modifier = Modifier.weight(1f)) { Text("🎙 बोलें") }
+                            Button(onClick = { sendMessage() }, modifier = Modifier.weight(1f), enabled = input.isNotBlank()) {
+                                Text("भेजें")
+                            }
+                        }
+                        Text(
+                            "नोट: अभी यह शुरुआती local demo है। असली AI जवाब के लिए सुरक्षित server/API connection जोड़ना बाकी है।",
+                            Modifier.padding(top = 12.dp),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
         }
+    }
+
+    private fun sendMessage() {
+        val message = input.trim()
+        if (message.isEmpty()) return
+        conversation.add("आप: $message")
+        input = ""
+        val reply = when {
+            message.contains("नमस्ते") || message.contains("hello", true) || message.contains("hi", true) ->
+                "नमस्ते! मैं JANU हूँ। बताइए, मैं आपकी क्या मदद करूँ?"
+            message.contains("समय") || message.contains("time", true) ->
+                "माफ़ कीजिए, इस demo में अभी live जानकारी उपलब्ध नहीं है।"
+            else ->
+                "मैंने आपकी बात सुनी: $message। असली AI जवाब देने के लिए JANU का AI server connection अभी जोड़ना बाकी है।"
+        }
+        conversation.add("JANU: $reply")
+        val hindi = message.any { it.code in 0x0900..0x097F }
+        tts?.language = if (hindi) Locale("hi", "IN") else Locale.US
+        tts?.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "janu_reply")
     }
 
     private fun startListening() {
@@ -67,12 +108,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PROMPT, "JANU से बात करें")
         }
         try { speechLauncher.launch(intent) } catch (_: Exception) {
-            speakReply = "इस फोन पर speech recognition उपलब्ध नहीं है।"
+            status = "इस फोन पर speech recognition उपलब्ध नहीं है।"
         }
     }
 
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN")
+    override fun onInit(statusCode: Int) {
+        if (statusCode == TextToSpeech.SUCCESS) tts?.language = Locale("hi", "IN")
     }
 
     override fun onDestroy() {
