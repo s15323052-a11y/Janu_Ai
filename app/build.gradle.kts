@@ -16,6 +16,12 @@ android {
         versionName = "0.1.0"
     }
 
+    // Keep Java and Kotlin bytecode targets aligned (the CI build uses JDK 17).
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     buildFeatures { compose = true }
 }
 
