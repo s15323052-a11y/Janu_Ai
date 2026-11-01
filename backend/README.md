@@ -31,3 +31,17 @@ A successful response is JSON with a `reply` field.
 ## Important status
 
 This folder is the secure API backend source, not a deployed service. The Android app still needs the deployed Worker URL configured and its chat screen wired to this endpoint before API chat works on the phone. Deployment requires access to your Cloudflare account and your own OpenAI API key; neither can be created from this GitHub connection.
+
+
+## Gemini provider (optional)
+
+JANU's backend also supports Google's Gemini API. To use it, create a Gemini API key in Google AI Studio and add it to the Worker as a server-side secret:
+
+`npx wrangler secret put GEMINI_API_KEY`
+
+Optional model setting in `wrangler.toml` or Worker vars:
+`GEMINI_MODEL = "gemini-3.8-flash"`
+
+When both provider keys exist, requests default to Gemini. To select a provider explicitly, send `{"message":"नमस्ते","provider":"gemini"}` or `{"message":"Hello","provider":"openai"}`. Keep both keys on the server; never embed them in the Android APK or commit them to GitHub.
+
+Official Gemini API reference: https://ai.google.dev/api/generate-content
