@@ -31,8 +31,7 @@ app.innerHTML = `
       <section id="chat-view" class="view">
         <div class="welcome"><div class="orb">✦</div><h2>Hello. I'm JANU.</h2><p>Ask, create, research, plan or build. Your workspace, your settings.</p></div>
         <div id="messages" class="messages" aria-live="polite"></div>
-        <div class="voice-toolbar" aria-label="Voice controls">
-          <button id="voice-input" type="button" aria-pressed="false">🎙️ बोलें</button>
+        <div class="voice-toolbar" aria-label="Voice settings">
           <label for="voice-language">भाषा</label>
           <select id="voice-language"><option value="hi-IN">हिंदी</option><option value="en-IN">English (India)</option></select>
           <label for="voice-type">आवाज़</label>
@@ -40,8 +39,8 @@ app.innerHTML = `
           <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
           <button id="stop-speaking" type="button">⏹ रोकें</button>
         </div>
-        <p id="voice-status" class="hint" aria-live="polite">माइक दबाकर बोलें। आवाज़ की उपलब्धता आपके ब्राउज़र और डिवाइस पर निर्भर है।</p>
-        <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button aria-label="Send message" type="submit">➤</button></form>
+        <p id="voice-status" class="hint" aria-live="polite">बात करने के लिए नीचे माइक दबाएँ। JANU जवाब लिखेगा और बोलकर भी सुनाएगा।</p>
+        <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button id="voice-input" class="voice-chat-button" type="button" aria-label="Talk to JANU" title="Talk to JANU" aria-pressed="false">🎙</button><button class="send-chat-button" aria-label="Send message" type="submit">➤</button></form>
         <p class="hint">Do not enter passwords, API keys or other secrets in chat. Voice input is processed by your browser/device speech service.</p>
       </section>
       <section id="shield-view" class="view hidden">
