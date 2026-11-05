@@ -72,6 +72,7 @@ app.innerHTML = `
   </div>
 `;
 
+app.prepend(login);
 const workspace = app.querySelector(".shell");
 workspace.hidden = !ownerToken;
 login.hidden = Boolean(ownerToken);
