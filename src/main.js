@@ -127,7 +127,11 @@ if ("speechSynthesis" in window) {
 }
 
 function speakText(text) {
-  if (!speakReplies.checked || !("speechSynthesis" in window)) return;
+  if (!speakReplies.checked) return;
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+    voiceStatus.textContent = "इस ब्राउज़र में बोलकर जवाब सुनाने की सुविधा उपलब्ध नहीं है।";
+    return;
+  }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = voiceLanguage.value;
@@ -138,13 +142,22 @@ function speakText(text) {
     : /male|man|david|mark|ravi|rishi|alex|daniel|george/i;
   utterance.voice = matching.find(v => genderWords.test(v.name)) || matching[0] || null;
   utterance.rate = 1;
+  utterance.onstart = () => { voiceStatus.textContent = "JANU जवाब बोल रहा है…"; };
+  utterance.onend = () => { voiceStatus.textContent = "जवाब पूरा हुआ। फिर से बोलने के लिए माइक दबाएँ।"; };
+  utterance.onerror = (event) => { voiceStatus.textContent = "आवाज़ सुनाने में समस्या: " + (event.error || "unknown"); };
   window.speechSynthesis.speak(utterance);
 }
 
+function resetVoiceInput() {
+  recognition = null;
+  voiceInputButton?.setAttribute("aria-pressed", "false");
+  if (voiceInputButton) voiceInputButton.textContent = "🎙️ बोलें";
+}
 function stopListening() {
-  if (recognition) {
-    try { recognition.stop(); } catch {}
-    recognition = null;
+  const activeRecognition = recognition;
+  recognition = null;
+  if (activeRecognition) {
+    try { activeRecognition.stop(); } catch {}
   }
   voiceInputButton?.setAttribute("aria-pressed", "false");
   if (voiceInputButton) voiceInputButton.textContent = "🎙️ बोलें";
@@ -152,36 +165,58 @@ function stopListening() {
 
 voiceInputButton?.addEventListener("click", () => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    voiceStatus.textContent = "इस ब्राउज़र में voice input उपलब्ध नहीं है। Android पर Chrome में साइट खोलकर माइक अनुमति दें।";
+  if (!window.isSecureContext) {
+    voiceStatus.textContent = "Voice सुविधा सुरक्षित HTTPS connection पर ही चलेगी। JANU को https:// से खोलें।";
     return;
   }
-  if (recognition) { stopListening(); return; }
-  recognition = new SpeechRecognition();
-  recognition.lang = voiceLanguage.value;
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.onstart = () => {
+  if (!SpeechRecognition) {
+    voiceStatus.textContent = "इस ब्राउज़र में voice input उपलब्ध नहीं है। Android पर Chrome में JANU खोलें और Microphone अनुमति दें।";
+    return;
+  }
+  if (recognition) { stopListening(); voiceStatus.textContent = "माइक बंद कर दिया गया।"; return; }
+  const activeRecognition = new SpeechRecognition();
+  recognition = activeRecognition;
+  activeRecognition.lang = voiceLanguage.value;
+  activeRecognition.interimResults = false;
+  activeRecognition.continuous = false;
+  activeRecognition.maxAlternatives = 1;
+  activeRecognition.onstart = () => {
     voiceInputButton.textContent = "⏹ सुनना बंद करें";
     voiceInputButton.setAttribute("aria-pressed", "true");
     voiceStatus.textContent = "JANU सुन रहा है… अब बोलिए।";
   };
-  recognition.onresult = (event) => {
+  activeRecognition.onresult = (event) => {
     const spoken = event.results?.[0]?.[0]?.transcript?.trim();
     if (spoken) {
       promptBox.value = spoken;
       voiceStatus.textContent = "आपने कहा: " + spoken;
       form.requestSubmit();
+    } else {
+      voiceStatus.textContent = "आवाज़ साफ़ नहीं समझ आई। कृपया दोबारा बोलें।";
     }
   };
-  recognition.onerror = (event) => {
-    voiceStatus.textContent = event.error === "not-allowed"
-      ? "माइक की अनुमति नहीं मिली। ब्राउज़र की Site settings में Microphone Allow करें।"
-      : "Voice input में समस्या: " + event.error;
+  activeRecognition.onnomatch = () => {
+    voiceStatus.textContent = "बोली गई बात समझ नहीं आई। धीरे और साफ़ बोलकर फिर कोशिश करें।";
   };
-  recognition.onend = () => { stopListening(); };
-  try { recognition.start(); }
-  catch (error) { voiceStatus.textContent = "माइक शुरू नहीं हो पाया: " + error.message; stopListening(); }
+  activeRecognition.onerror = (event) => {
+    const messages = {
+      "not-allowed": "माइक की अनुमति नहीं मिली। Android/Chrome की Site settings में Microphone को Allow करें।",
+      "service-not-allowed": "ब्राउज़र की speech service उपलब्ध नहीं है या अनुमति नहीं है।",
+      "no-speech": "कोई आवाज़ नहीं मिली। माइक के पास बोलकर फिर कोशिश करें।",
+      "audio-capture": "माइक नहीं मिल रहा। फोन की Microphone permission और माइक जाँचें।",
+      "network": "Speech recognition की network service से संपर्क नहीं हो पाया। Internet जाँचकर फिर कोशिश करें।",
+      "language-not-supported": "चुनी हुई भाषा इस browser की speech service में समर्थित नहीं है।"
+    };
+    voiceStatus.textContent = messages[event.error] || "Voice input में समस्या: " + event.error;
+  };
+  activeRecognition.onend = () => {
+    if (recognition === activeRecognition) resetVoiceInput();
+  };
+  try { activeRecognition.start(); }
+  catch (error) {
+    voiceStatus.textContent = "माइक शुरू नहीं हो पाया: " + error.message;
+    resetVoiceInput();
+  }
 });
 
 document.querySelector("#stop-speaking")?.addEventListener("click", () => {
