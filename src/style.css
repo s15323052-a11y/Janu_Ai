@@ -13,3 +13,9 @@
 .speak-toggle input{accent-color:#8b82ff}
 #voice-status{text-align:left;margin:6px 2px 12px}
 @media(max-width:520px){.voice-toolbar{gap:8px}.voice-toolbar label{font-size:12px}.voice-toolbar select{padding:8px;max-width:125px}}
+
+/* Keep voice conversation directly beside the chat send control. */
+.composer .voice-chat-button{flex:0 0 46px;width:46px;height:46px;border:1px solid #5b70a0;border-radius:50%;background:#203b59;color:#eaf6ff;font-size:21px;display:grid;place-items:center;cursor:pointer}
+.composer .voice-chat-button[aria-pressed="true"]{background:#744ee8;border-color:#b4a6ff;box-shadow:0 0 0 4px #8b82ff33}
+.composer .send-chat-button{flex:0 0 46px;width:46px;height:46px}
+@media(max-width:520px){.composer{gap:7px;padding:8px}.composer textarea{min-width:0;padding:8px}.composer .voice-chat-button,.composer .send-chat-button{flex-basis:42px;width:42px;height:42px}}
