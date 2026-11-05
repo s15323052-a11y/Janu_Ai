@@ -140,10 +140,6 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    if (!env.OPENAI_API_KEY) {
-      return json({ error: "Server API key is not configured. Add OPENAI_API_KEY as a Cloudflare secret." }, 503);
-    }
-
     let body;
     try { body = await request.json(); }
     catch { return json({ error: "Request body must be valid JSON." }, 400); }
