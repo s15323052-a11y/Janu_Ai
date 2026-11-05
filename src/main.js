@@ -1,5 +1,7 @@
 import "./style.css";
 
+const API_BASE_URL = "https://janu-ai-api.s15323052.workers.dev";
+const apiUrl = (path) => new URL(path, API_BASE_URL).toString();
 const app = document.querySelector("#app");
 let ownerToken = sessionStorage.getItem("janu-owner-session") || "";
 const login = document.createElement("section");
@@ -81,7 +83,7 @@ document.querySelector("#owner-login-form").addEventListener("submit", async (ev
   const errorBox = document.querySelector("#owner-login-error");
   errorBox.textContent = "Signing in…";
   try {
-    const response = await fetch("/api/auth/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password:document.querySelector("#owner-password").value}) });
+    const response = await fetch(apiUrl("/api/auth/login"), { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password:document.querySelector("#owner-password").value}) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Sign-in failed.");
     ownerToken = data.token;
@@ -135,7 +137,7 @@ form.addEventListener("submit", async (event) => {
   waiting.textContent = "JANU is preparing a response…";
   messages.append(waiting);
   try {
-    const response = await ownerFetch("/api/chat", {
+    const response = await ownerFetch(apiUrl("/api/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, adultMode })
@@ -150,7 +152,7 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-fetch("/api/health").catch(() => {});
+fetch(apiUrl("/api/health")).catch(() => {});
 
 
 const securityForm = document.querySelector("#security-form");
@@ -160,7 +162,7 @@ securityForm.addEventListener("submit", async (event) => {
   const resultBox = document.querySelector("#security-result");
   resultBox.textContent = "Analyzing supplied event…";
   try {
-    const response = await ownerFetch("/api/security/analyze", {
+    const response = await ownerFetch(apiUrl("/api/security/analyze"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description })
@@ -200,7 +202,7 @@ planForm.addEventListener("submit", async (event) => {
   const scope = [...planForm.querySelectorAll('input[name="scope"]:checked')].map(input => input.value);
   resultBox.textContent = "Preparing authorized test checklist…";
   try {
-    const response = await ownerFetch("/api/security/plan", {
+    const response = await ownerFetch(apiUrl("/api/security/plan"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
