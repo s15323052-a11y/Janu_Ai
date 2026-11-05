@@ -11,6 +11,7 @@ A starter foundation for a personal AI workspace with a chat interface, an adult
 - `/api/health` — API health/configuration check.
 - `/api/chat` — server-side AI provider proxy.
 - `/api/security/analyze` — rule-based triage for a security event description supplied by the user.
+- `/api/security/plan` — creates a permission-gated, non-destructive security test checklist for selected web/API/authentication/configuration areas.
 
 ## Run the web interface
 
@@ -32,7 +33,7 @@ Never put provider API keys in browser code or commit them to Git.
 
 ## Current scope and honest limitations
 
-This is the initial application scaffold, not a finished production service. The 18+ switch is a conversation preference, not an age-verification system and not a way to bypass provider policies or legal safeguards. The Cyber Shield page includes defensive guidance and a rule-based triage endpoint for text that the user manually submits. It does not inspect devices, ingest live logs, detect intrusions in real time, identify attackers, block IP addresses, or monitor networks.
+This is the initial application scaffold, not a finished production service. The 18+ switch is a conversation preference, not an age-verification system and not a way to bypass provider policies or legal safeguards. The Cyber Shield page includes defensive guidance, rule-based triage for manually submitted event descriptions, and a permission-confirmed test-plan builder. It does not inspect devices, ingest live logs, detect intrusions in real time, identify attackers, block IP addresses, monitor networks, or execute security tests.
 
 Before production use, add owner authentication, server-side authorization, rate limiting, abuse monitoring, secure storage, privacy controls, automated tests, and explicit consent for any device/network security integrations. A real Cyber Shield must use authorized endpoint/network security tools and narrowly scoped permissions.
 
