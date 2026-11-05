@@ -156,6 +156,13 @@ export default {
     const modeNote = body.adultMode === true
       ? "Adult conversation preference is enabled for this user. Respond maturely to lawful adult topics while following the system safeguards."
       : "Standard conversation mode is enabled.";
+    const history = Array.isArray(body.history) ? body.history.slice(-20) : [];
+    const safeHistory = history
+      .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string")
+      .map(item => ({ role: item.role, content: item.content.slice(0, 12000) }));
+    // The latest message is already included in history by the client; avoid duplicating it.
+    const last = safeHistory[safeHistory.length - 1];
+    if (!last || last.role !== "user" || last.content !== message) safeHistory.push({ role: "user", content: message });
 
     try {
       const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -168,7 +175,7 @@ export default {
           model: env.JANU_MODEL || "gpt-4o-mini",
           messages: [
             { role: "system", content: SYSTEM_PROMPT + "\\n" + modeNote },
-            { role: "user", content: message }
+            ...safeHistory
           ]
         })
       });
