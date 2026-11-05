@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install frontend dependencies and build
+        run: |
+          npm install
+          npm run build
+
       - name: Configure Wrangler credentials
         working-directory: backend
         env:
@@ -46,7 +51,7 @@ jobs:
             printf '%s' "$value" | npx --yes wrangler@latest secret put "$name"
           done
 
-      - name: Deploy Worker
+      - name: Deploy Worker and frontend assets
         working-directory: backend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
