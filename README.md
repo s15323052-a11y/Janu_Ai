@@ -25,9 +25,13 @@ A starter foundation for a personal AI workspace with a chat interface, an adult
 From `backend/`:
 
 1. Install Wrangler.
-2. Set the secret with `npx wrangler secret put OPENAI_API_KEY`.
-3. Deploy with `npx wrangler deploy`.
-4. Configure the Vite development proxy or production routing so `/api/*` reaches the Worker.
+2. Set the AI provider secret with `npx wrangler secret put OPENAI_API_KEY`.
+3. Set a strong owner password with `npx wrangler secret put JANU_OWNER_PASSWORD`.
+4. Set a separate random signing secret (at least 32 random bytes) with `npx wrangler secret put JANU_OWNER_SECRET`.
+5. Deploy with `npx wrangler deploy`.
+6. Configure the Vite development proxy or production routing so `/api/*` reaches the Worker.
+
+The app starts behind an owner sign-in screen. The login endpoint exchanges the owner password for a signed 12-hour session token. The browser keeps the token in sessionStorage; all chat and security POST endpoints require it. Never commit either owner secret, place it in frontend code, or share it in chat. If the owner password or signing secret is lost, rotate the Cloudflare secret and sign in again. The public health endpoint exposes only service status and whether the AI key is configured.
 
 Never put provider API keys in browser code or commit them to Git.
 
