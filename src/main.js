@@ -31,7 +31,16 @@ app.innerHTML = `
           <article class="card"><span class="card-icon">◉</span><h3>Suspicious activity</h3><p>Review recent sign-ins and active sessions in the official security settings of each account.</p></article>
           <article class="card"><span class="card-icon">⬡</span><h3>Incident response</h3><p>Disconnect a compromised device from the network, preserve evidence and change credentials from a clean device.</p></article>
         </div>
-        <div class="notice"><strong>Important:</strong> This starter dashboard does not scan devices, block attackers or monitor networks. Those capabilities require separately installed, permissioned security software and integrations.</div>
+        <div class="triage card">
+          <h3>Analyze a security event</h3>
+          <p>Paste an alert or log excerpt with secrets and personal information removed.</p>
+          <form id="security-form">
+            <textarea id="security-description" rows="4" maxlength="5000" placeholder="Example: multiple failed login attempts from an unfamiliar device..." required></textarea>
+            <button type="submit">Analyze event</button>
+          </form>
+          <div id="security-result" aria-live="polite"></div>
+        </div>
+        <div class="notice"><strong>Current capability:</strong> This performs rule-based triage on text you submit. It does not scan devices, monitor live network traffic, identify an attacker or block connections. Real detection requires an installed endpoint agent, authorized log integrations and deployment.</div>
       </section>
     </main>
   </div>
@@ -96,3 +105,43 @@ form.addEventListener("submit", async (event) => {
 });
 
 fetch("/api/health").catch(() => {});
+
+
+const securityForm = document.querySelector("#security-form");
+securityForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const description = document.querySelector("#security-description").value.trim();
+  const resultBox = document.querySelector("#security-result");
+  resultBox.textContent = "Analyzing supplied event…";
+  try {
+    const response = await fetch("/api/security/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Analysis failed.");
+    resultBox.replaceChildren();
+    const heading = document.createElement("h4");
+    heading.textContent = `Triage level: ${data.severity.toUpperCase()}`;
+    resultBox.append(heading);
+    for (const finding of data.findings) {
+      const item = document.createElement("article");
+      item.className = "finding";
+      const title = document.createElement("strong");
+      title.textContent = finding.title;
+      const detail = document.createElement("p");
+      detail.textContent = finding.detail;
+      const action = document.createElement("p");
+      action.textContent = `Recommended action: ${finding.action}`;
+      item.append(title, detail, action);
+      resultBox.append(item);
+    }
+    const disclaimer = document.createElement("p");
+    disclaimer.className = "hint";
+    disclaimer.textContent = data.disclaimer;
+    resultBox.append(disclaimer);
+  } catch (error) {
+    resultBox.textContent = `Security analysis is unavailable: ${error.message}`;
+  }
+});
