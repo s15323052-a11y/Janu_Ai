@@ -20,6 +20,7 @@ app.innerHTML = `
       <div class="brand"><span class="brand-mark">J</span><div><strong>JANU AI</strong><small>MY AI. MY RULES. MY CONTROL.</small></div></div>
       <button class="nav active" data-view="chat">✦ <span>Chat</span></button>
       <button class="nav" data-view="shield">◈ <span>Cyber Shield</span></button>
+      <button class="nav" data-view="memory">▤ <span>Memory</span></button>
       <div class="side-bottom">
         <div class="owner-card"><span class="online-dot"></span><div><strong>Personal workspace</strong><small>Owner controls are local to this demo</small></div></div>
       </div>
@@ -79,6 +80,18 @@ app.innerHTML = `
           <div id="security-result" aria-live="polite"></div>
         </div>
         <div class="notice"><strong>Current capability:</strong> This performs rule-based triage on text you submit. It does not scan devices, monitor live network traffic, identify an attacker or block connections. Real detection requires an installed endpoint agent, authorized log integrations and deployment.</div>
+      </section>
+      <section id="memory-view" class="view hidden">
+        <div class="triage card">
+          <h2>JANU Memory</h2>
+          <p>यहाँ केवल वही बातें सेव होंगी जिन्हें आप खुद लिखकर सेव करेंगे। आप किसी भी समय इन्हें देख या मिटा सकते हैं। अभी पूरी चैट अपने-आप सेव नहीं होती।</p>
+          <form id="memory-form">
+            <textarea id="memory-text" rows="3" maxlength="1000" placeholder="वह बात लिखें जिसे JANU याद रखे..." required></textarea>
+            <button type="submit">याद रखें</button>
+          </form>
+          <p id="memory-status" class="hint" role="status"></p>
+          <div id="memory-list" aria-live="polite"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -250,10 +263,12 @@ toggle.addEventListener("change", () => {
 document.querySelectorAll(".nav").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b === button));
-    const shield = button.dataset.view === "shield";
-    document.querySelector("#chat-view").classList.toggle("hidden", shield);
-    document.querySelector("#shield-view").classList.toggle("hidden", !shield);
-    document.querySelector("#page-title").textContent = shield ? "Cyber Shield" : "What shall we create?";
+    const view = button.dataset.view;
+    document.querySelector("#chat-view").classList.toggle("hidden", view !== "chat");
+    document.querySelector("#shield-view").classList.toggle("hidden", view !== "shield");
+    document.querySelector("#memory-view").classList.toggle("hidden", view !== "memory");
+    document.querySelector("#page-title").textContent = view === "shield" ? "Cyber Shield" : view === "memory" ? "JANU Memory" : "What shall we create?";
+    if (view === "memory") loadMemory();
   });
 });
 
@@ -390,4 +405,54 @@ planForm.addEventListener("submit", async (event) => {
   } catch (error) {
     resultBox.textContent = error.message;
   }
+});
+
+
+async function loadMemory() {
+  const list = document.querySelector("#memory-list");
+  const status = document.querySelector("#memory-status");
+  list.replaceChildren();
+  status.textContent = "Saved memories लोड हो रही हैं…";
+  try {
+    const response = await ownerFetch(apiUrl("/api/memory"));
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Memory load failed.");
+    status.textContent = data.items.length ? `${data.items.length} बातें सेव हैं।` : "अभी कोई बात सेव नहीं है।";
+    for (const item of data.items) {
+      const row = document.createElement("article");
+      row.className = "finding";
+      const content = document.createElement("p");
+      content.textContent = item.text;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "मिटाएँ";
+      remove.addEventListener("click", async () => {
+        if (!confirm("क्या इस याद को मिटाना चाहते हैं?")) return;
+        const deleted = await ownerFetch(apiUrl("/api/memory/" + encodeURIComponent(item.id)), { method: "DELETE" });
+        if (!deleted.ok) { status.textContent = "याद मिटाई नहीं जा सकी।"; return; }
+        loadMemory();
+      });
+      row.append(content, remove);
+      list.append(row);
+    }
+  } catch (error) { status.textContent = error.message; }
+}
+
+document.querySelector("#memory-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.querySelector("#memory-text");
+  const status = document.querySelector("#memory-status");
+  status.textContent = "सेव किया जा रहा है…";
+  try {
+    const response = await ownerFetch(apiUrl("/api/memory"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input.value.trim() })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Memory save failed.");
+    input.value = "";
+    status.textContent = "यह बात JANU की Memory में सेव हो गई।";
+    loadMemory();
+  } catch (error) { status.textContent = error.message; }
 });
