@@ -1,0 +1,6 @@
+name = "janu-ai-api"
+main = "src/index.js"
+compatibility_date = "2026-11-05"
+
+[vars]
+JANU_MODEL = "gpt-4o-mini"
