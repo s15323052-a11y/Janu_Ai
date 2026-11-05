@@ -31,6 +31,7 @@ app.innerHTML = `
       <section id="chat-view" class="view">
         <div class="welcome"><div class="orb">✦</div><h2>Hello. I'm JANU.</h2><p>Ask, create, research, plan or build. Your workspace, your settings.</p></div>
         <div id="messages" class="messages" aria-live="polite"></div>
+        <p id="service-status" class="hint" role="status">JANU सेवा से संपर्क हो रहा है…</p>
         <div class="voice-toolbar" aria-label="Voice settings">
           <label for="voice-language">भाषा</label>
           <select id="voice-language"><option value="hi-IN">हिंदी</option><option value="en-IN">English (India)</option></select>
@@ -260,6 +261,10 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = promptBox.value.trim();
   if (!message) return;
+  const sendButton = form.querySelector('button[type="submit"]');
+  if (sendButton.disabled) return;
+  sendButton.disabled = true;
+  sendButton.textContent = "…";
   addMessage("user", message);
   conversationHistory.push({ role: "user", content: message });
   promptBox.value = "";
@@ -275,17 +280,40 @@ form.addEventListener("submit", async (event) => {
     });
     const data = await response.json();
     waiting.remove();
-    if (!response.ok) throw new Error(data.error || "The API request failed.");
+    if (!response.ok) { const error = new Error(data.error || "The API request failed."); error.status = response.status; throw error; }
     conversationHistory.push({ role: "assistant", content: data.reply });
     addMessage("assistant", data.reply);
   } catch (error) {
     conversationHistory.pop();
     waiting.remove();
-    addMessage("assistant", `JANU chat service error: ${error.message}`);
+    if (error.status === 401) {
+      ownerToken = "";
+      sessionStorage.removeItem("janu-owner-session");
+      workspace.hidden = true;
+      login.hidden = false;
+      document.querySelector("#owner-login-error").textContent = "आपका session समाप्त हो गया है। दोबारा sign in करें।";
+    }
+    addMessage("assistant", `JANU जवाब नहीं दे पाया: ${error.message}`);
+  } finally {
+    sendButton.disabled = false;
+    sendButton.textContent = "➤";
   }
 });
 
-fetch(apiUrl("/api/health")).catch(() => {});
+async function checkJanuService() {
+  const status = document.querySelector("#service-status");
+  try {
+    const response = await fetch(apiUrl("/api/health"), { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error("JANU API उपलब्ध नहीं है।");
+    status.textContent = data.configured
+      ? "JANU API online है। AI सेवा configured है; chat के लिए owner sign-in जरूरी है।"
+      : "JANU API online है, लेकिन AI key configured नहीं है। इसलिए JANU जवाब नहीं दे पाएगा।";
+  } catch (error) {
+    status.textContent = "JANU सेवा से संपर्क नहीं हो पाया। Internet या service जाँचें।";
+  }
+}
+checkJanuService();
 
 
 const securityForm = document.querySelector("#security-form");
