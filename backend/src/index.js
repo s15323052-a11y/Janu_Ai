@@ -74,7 +74,8 @@ function buildAuthorizedTestPlan(body) {
     safety: "Planning only. This endpoint does not connect to, scan, exploit, or modify the named asset. Run tests only against assets explicitly in scope, preferably in staging, and stop if service impact occurs."
   };
 }
-\nexport default {
+
+export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/health") {
