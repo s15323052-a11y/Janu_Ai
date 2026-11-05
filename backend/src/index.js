@@ -140,7 +140,8 @@ export default {
     }
 
     if (request.method !== "POST" || url.pathname !== "/api/chat") {
-      return json({ error: "Not found" }, 404);
+      if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
+      return env.ASSETS.fetch(request);
     }
 
     if (!env.OPENAI_API_KEY) {
