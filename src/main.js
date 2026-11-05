@@ -108,6 +108,8 @@ const messages = document.querySelector("#messages");
 const form = document.querySelector("#chat-form");
 const promptBox = document.querySelector("#prompt");
 const toggle = document.querySelector("#adult-toggle");
+// Conversation context is kept in this browser tab for the current session.
+const conversationHistory = [];
 
 let availableVoices = [];
 let recognition = null;
@@ -260,6 +262,7 @@ form.addEventListener("submit", async (event) => {
   const message = promptBox.value.trim();
   if (!message) return;
   addMessage("user", message);
+  conversationHistory.push({ role: "user", content: message });
   promptBox.value = "";
   const waiting = document.createElement("div");
   waiting.className = "message assistant";
@@ -269,15 +272,17 @@ form.addEventListener("submit", async (event) => {
     const response = await ownerFetch(apiUrl("/api/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, adultMode })
+      body: JSON.stringify({ message, history: conversationHistory.slice(-20), adultMode })
     });
     const data = await response.json();
     waiting.remove();
     if (!response.ok) throw new Error(data.error || "The API request failed.");
+    conversationHistory.push({ role: "assistant", content: data.reply });
     addMessage("assistant", data.reply);
   } catch (error) {
+    conversationHistory.pop();
     waiting.remove();
-    addMessage("assistant", `The chat service is not connected yet: ${error.message} Check the backend setup before using live chat.`);
+    addMessage("assistant", `JANU chat service error: ${error.message}`);
   }
 });
 
