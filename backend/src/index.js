@@ -1,6 +1,10 @@
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": "no-store"
+  "Cache-Control": "no-store",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400"
 };
 
 function json(data, status = 200) {
@@ -88,6 +92,9 @@ export { analyzeSecurityEvent, buildAuthorizedTestPlan };
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: JSON_HEADERS });
+    }
     if (request.method === "GET" && url.pathname === "/api/health") {
       return json({ ok: true, service: "janu-ai-api", configured: Boolean(env.OPENAI_API_KEY) });
     }
