@@ -32,6 +32,24 @@ app.innerHTML = `
           <article class="card"><span class="card-icon">⬡</span><h3>Incident response</h3><p>Disconnect a compromised device from the network, preserve evidence and change credentials from a clean device.</p></article>
         </div>
         <div class="triage card">
+          <h3>Build an authorized security test plan</h3>
+          <p>Prepare a non-destructive checklist for systems you own or are explicitly permitted to test.</p>
+          <form id="security-plan-form">
+            <input id="security-asset" type="text" maxlength="240" placeholder="Asset name or URL (e.g. your staging app)" required>
+            <div class="scope-options">
+              <label><input type="checkbox" name="scope" value="web-app"> Web app</label>
+              <label><input type="checkbox" name="scope" value="api"> API</label>
+              <label><input type="checkbox" name="scope" value="authentication"> Authentication</label>
+              <label><input type="checkbox" name="scope" value="configuration"> Configuration</label>
+              <label><input type="checkbox" name="scope" value="headers"> Security headers</label>
+              <label><input type="checkbox" name="scope" value="dependencies"> Dependencies</label>
+            </div>
+            <label class="authorization-check"><input id="security-authorization" type="checkbox" required> I own this asset or have written permission to test it.</label>
+            <button type="submit">Create test plan</button>
+          </form>
+          <div id="security-plan-result" aria-live="polite"></div>
+        </div>
+        <div class="triage card">
           <h3>Analyze a security event</h3>
           <p>Paste an alert or log excerpt with secrets and personal information removed.</p>
           <form id="security-form">
@@ -143,5 +161,42 @@ securityForm.addEventListener("submit", async (event) => {
     resultBox.append(disclaimer);
   } catch (error) {
     resultBox.textContent = `Security analysis is unavailable: ${error.message}`;
+  }
+});
+
+
+const planForm = document.querySelector("#security-plan-form");
+planForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const resultBox = document.querySelector("#security-plan-result");
+  const scope = [...planForm.querySelectorAll('input[name="scope"]:checked')].map(input => input.value);
+  resultBox.textContent = "Preparing authorized test checklist…";
+  try {
+    const response = await fetch("/api/security/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        asset: document.querySelector("#security-asset").value.trim(),
+        authorization: document.querySelector("#security-authorization").checked,
+        scope
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not create test plan.");
+    resultBox.replaceChildren();
+    const heading = document.createElement("h4");
+    heading.textContent = `Authorized plan for: ${data.asset}`;
+    resultBox.append(heading);
+    for (const row of data.plan) {
+      const item = document.createElement("p");
+      item.textContent = `[${row.area}] ${row.test}`;
+      resultBox.append(item);
+    }
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = data.safety;
+    resultBox.append(note);
+  } catch (error) {
+    resultBox.textContent = error.message;
   }
 });
