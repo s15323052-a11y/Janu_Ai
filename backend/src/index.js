@@ -7,6 +7,14 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
 
+const SESSION_TTL_SECONDS = 43200;
+const encoder = new TextEncoder();
+function b64url(bytes) { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_"); }
+function unb64url(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s + "=".repeat((4 - s.length % 4) % 4)); return Uint8Array.from(raw, x => x.charCodeAt(0)); }
+async function signOwnerSession(payload, secret) { const key = await crypto.subtle.importKey("raw", encoder.encode(secret), {name:"HMAC",hash:"SHA-256"}, false, ["sign"]); const body = b64url(encoder.encode(JSON.stringify(payload))); const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(body))); return body + "." + b64url(sig); }
+async function verifyOwnerSession(token, secret) { if (!token || !secret) return false; const p = token.split("."); if (p.length !== 2) return false; try { const key = await crypto.subtle.importKey("raw", encoder.encode(secret), {name:"HMAC",hash:"SHA-256"}, false, ["verify"]); if (!await crypto.subtle.verify("HMAC", key, unb64url(p[1]), encoder.encode(p[0]))) return false; const data = JSON.parse(new TextDecoder().decode(unb64url(p[0]))); return data.role === "owner" && data.exp > Math.floor(Date.now()/1000); } catch { return false; } }
+function constantTimeEqual(a,b) { const x=encoder.encode(a), y=encoder.encode(b); if(x.length!==y.length) return false; let d=0; for(let i=0;i<x.length;i++) d |= x[i]^y[i]; return d===0; }
+
 const SYSTEM_PROMPT = `You are JANU AI, a helpful personal assistant. Be clear, respectful, and useful. Support Hindi and English. The user may enable an adult-conversation preference; this does not override applicable law, provider terms, or safeguards against exploitation, sexual content involving minors, non-consensual intimate content, violence, cyber abuse, or privacy invasion. For cybersecurity, provide defensive guidance and authorized testing only. Never claim to have scanned or secured a device unless a connected tool actually performed that action.`;
 
 function analyzeSecurityEvent(event) {
@@ -82,6 +90,23 @@ export default {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/health") {
       return json({ ok: true, service: "janu-ai-api", configured: Boolean(env.OPENAI_API_KEY) });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/auth/login") {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON." }, 400); }
+      if (!env.JANU_OWNER_PASSWORD || !env.JANU_OWNER_SECRET) return json({ error: "Owner authentication is not configured. Set JANU_OWNER_PASSWORD and JANU_OWNER_SECRET as Cloudflare secrets." }, 503);
+      const password = typeof body.password === "string" ? body.password : "";
+      if (!password || !constantTimeEqual(password, env.JANU_OWNER_PASSWORD)) return json({ error: "Invalid owner credentials." }, 401);
+      const now = Math.floor(Date.now()/1000);
+      const token = await signOwnerSession({ role:"owner", iat:now, exp:now+SESSION_TTL_SECONDS }, env.JANU_OWNER_SECRET);
+      return json({ token, expiresIn: SESSION_TTL_SECONDS });
+    }
+
+    if (url.pathname.startsWith("/api/") && url.pathname !== "/api/health" && url.pathname !== "/api/auth/login") {
+      const header = request.headers.get("Authorization") || "";
+      const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+      if (!await verifyOwnerSession(token, env.JANU_OWNER_SECRET)) return json({ error: "Owner authentication required or session expired." }, 401);
     }
 
     if (request.method === "POST" && url.pathname === "/api/security/plan") {
