@@ -1,6 +1,14 @@
 import "./style.css";
 
 const app = document.querySelector("#app");
+let ownerToken = sessionStorage.getItem("janu-owner-session") || "";
+const login = document.createElement("section");
+login.id = "owner-login";
+login.style.cssText = "max-width:420px;margin:12vh auto;padding:32px;border:1px solid #334155;border-radius:18px;background:#111827;color:#f8fafc;font:16px system-ui";
+login.innerHTML = '<h1>JANU AI Owner Login</h1><p>Private owner workspace. Session expires after 12 hours.</p><form id="owner-login-form"><label for="owner-password">Owner password</label><input id="owner-password" type="password" autocomplete="current-password" required style="display:block;width:100%;box-sizing:border-box;margin:10px 0 16px;padding:12px;border-radius:8px"><button type="submit" style="padding:10px 18px">Sign in</button><p id="owner-login-error" role="alert"></p></form>';
+app.append(login);
+const ownerFetch = (url, options = {}) => { const headers = new Headers(options.headers || {}); if (ownerToken) headers.set("Authorization", "Bearer " + ownerToken); return fetch(url, { ...options, headers }); };
+
 const adultModeKey = "janu-adult-mode";
 let adultMode = localStorage.getItem(adultModeKey) === "on";
 
@@ -64,6 +72,25 @@ app.innerHTML = `
   </div>
 `;
 
+const workspace = app.querySelector(".shell");
+workspace.hidden = !ownerToken;
+login.hidden = Boolean(ownerToken);
+document.querySelector("#owner-login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorBox = document.querySelector("#owner-login-error");
+  errorBox.textContent = "Signing in…";
+  try {
+    const response = await fetch("/api/auth/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password:document.querySelector("#owner-password").value}) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Sign-in failed.");
+    ownerToken = data.token;
+    sessionStorage.setItem("janu-owner-session", ownerToken);
+    login.hidden = true;
+    workspace.hidden = false;
+    document.querySelector("#owner-password").value = "";
+  } catch (error) { errorBox.textContent = error.message; }
+});
+
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chat-form");
 const promptBox = document.querySelector("#prompt");
@@ -107,7 +134,7 @@ form.addEventListener("submit", async (event) => {
   waiting.textContent = "JANU is preparing a response…";
   messages.append(waiting);
   try {
-    const response = await fetch("/api/chat", {
+    const response = await ownerFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, adultMode })
@@ -132,7 +159,7 @@ securityForm.addEventListener("submit", async (event) => {
   const resultBox = document.querySelector("#security-result");
   resultBox.textContent = "Analyzing supplied event…";
   try {
-    const response = await fetch("/api/security/analyze", {
+    const response = await ownerFetch("/api/security/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description })
@@ -172,7 +199,7 @@ planForm.addEventListener("submit", async (event) => {
   const scope = [...planForm.querySelectorAll('input[name="scope"]:checked')].map(input => input.value);
   resultBox.textContent = "Preparing authorized test checklist…";
   try {
-    const response = await fetch("/api/security/plan", {
+    const response = await ownerFetch("/api/security/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
