@@ -31,8 +31,18 @@ app.innerHTML = `
       <section id="chat-view" class="view">
         <div class="welcome"><div class="orb">✦</div><h2>Hello. I'm JANU.</h2><p>Ask, create, research, plan or build. Your workspace, your settings.</p></div>
         <div id="messages" class="messages" aria-live="polite"></div>
+        <div class="voice-toolbar" aria-label="Voice controls">
+          <button id="voice-input" type="button" aria-pressed="false">🎙️ बोलें</button>
+          <label for="voice-language">भाषा</label>
+          <select id="voice-language"><option value="hi-IN">हिंदी</option><option value="en-IN">English (India)</option></select>
+          <label for="voice-type">आवाज़</label>
+          <select id="voice-type"><option value="female">महिला</option><option value="male">पुरुष</option></select>
+          <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
+          <button id="stop-speaking" type="button">⏹ रोकें</button>
+        </div>
+        <p id="voice-status" class="hint" aria-live="polite">माइक दबाकर बोलें। आवाज़ की उपलब्धता आपके ब्राउज़र और डिवाइस पर निर्भर है।</p>
         <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button aria-label="Send message" type="submit">➤</button></form>
-        <p class="hint">Do not enter passwords, API keys or other secrets in chat.</p>
+        <p class="hint">Do not enter passwords, API keys or other secrets in chat. Voice input is processed by your browser/device speech service.</p>
       </section>
       <section id="shield-view" class="view hidden">
         <div class="shield-hero"><div class="shield-icon">◈</div><div><span class="eyebrow">JANU AI CYBER SHIELD</span><h2>Protect your digital life.</h2><p>Security guidance and incident-response workspace.</p></div></div>
@@ -99,6 +109,89 @@ const form = document.querySelector("#chat-form");
 const promptBox = document.querySelector("#prompt");
 const toggle = document.querySelector("#adult-toggle");
 
+let availableVoices = [];
+let recognition = null;
+const voiceInputButton = document.querySelector("#voice-input");
+const voiceLanguage = document.querySelector("#voice-language");
+const voiceType = document.querySelector("#voice-type");
+const speakReplies = document.querySelector("#speak-replies");
+const voiceStatus = document.querySelector("#voice-status");
+
+function loadSpeechVoices() {
+  if (!("speechSynthesis" in window)) return;
+  availableVoices = window.speechSynthesis.getVoices();
+}
+if ("speechSynthesis" in window) {
+  loadSpeechVoices();
+  window.speechSynthesis.addEventListener?.("voiceschanged", loadSpeechVoices);
+}
+
+function speakText(text) {
+  if (!speakReplies.checked || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = voiceLanguage.value;
+  const languagePrefix = voiceLanguage.value.toLowerCase().split("-")[0];
+  const matching = availableVoices.filter(v => v.lang?.toLowerCase().startsWith(languagePrefix));
+  const genderWords = voiceType.value === "female"
+    ? /female|woman|zira|samantha|susan|heera|lekha|karen|veena|priya/i
+    : /male|man|david|mark|ravi|rishi|alex|daniel|george/i;
+  utterance.voice = matching.find(v => genderWords.test(v.name)) || matching[0] || null;
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopListening() {
+  if (recognition) {
+    try { recognition.stop(); } catch {}
+    recognition = null;
+  }
+  voiceInputButton?.setAttribute("aria-pressed", "false");
+  if (voiceInputButton) voiceInputButton.textContent = "🎙️ बोलें";
+}
+
+voiceInputButton?.addEventListener("click", () => {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    voiceStatus.textContent = "इस ब्राउज़र में voice input उपलब्ध नहीं है। Android पर Chrome में साइट खोलकर माइक अनुमति दें।";
+    return;
+  }
+  if (recognition) { stopListening(); return; }
+  recognition = new SpeechRecognition();
+  recognition.lang = voiceLanguage.value;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    voiceInputButton.textContent = "⏹ सुनना बंद करें";
+    voiceInputButton.setAttribute("aria-pressed", "true");
+    voiceStatus.textContent = "JANU सुन रहा है… अब बोलिए।";
+  };
+  recognition.onresult = (event) => {
+    const spoken = event.results?.[0]?.[0]?.transcript?.trim();
+    if (spoken) {
+      promptBox.value = spoken;
+      voiceStatus.textContent = "आपने कहा: " + spoken;
+      form.requestSubmit();
+    }
+  };
+  recognition.onerror = (event) => {
+    voiceStatus.textContent = event.error === "not-allowed"
+      ? "माइक की अनुमति नहीं मिली। ब्राउज़र की Site settings में Microphone Allow करें।"
+      : "Voice input में समस्या: " + event.error;
+  };
+  recognition.onend = () => { stopListening(); };
+  try { recognition.start(); }
+  catch (error) { voiceStatus.textContent = "माइक शुरू नहीं हो पाया: " + error.message; stopListening(); }
+});
+
+document.querySelector("#stop-speaking")?.addEventListener("click", () => {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+});
+voiceLanguage?.addEventListener("change", () => {
+  if (recognition) stopListening();
+  voiceStatus.textContent = "भाषा बदल गई। अगली voice command नई भाषा में होगी।";
+});
+
 function addMessage(role, text) {
   const item = document.createElement("div");
   item.className = `message ${role}`;
@@ -109,6 +202,7 @@ function addMessage(role, text) {
   item.append(label, body);
   messages.append(item);
   item.scrollIntoView({ behavior: "smooth", block: "end" });
+  if (role === "assistant") speakText(text);
 }
 
 toggle.addEventListener("change", () => {
