@@ -92,7 +92,7 @@ export default {
       return new Response(null, { status: 204, headers: JSON_HEADERS });
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
-      return json({ ok: true, service: "janu-ai-api", configured: Boolean(env.OPENAI_API_KEY) });
+      return json({ ok: true, service: "janu-ai-api", configured: Boolean(env.AI || env.OPENAI_API_KEY), provider: env.AI ? "cloudflare-workers-ai" : (env.OPENAI_API_KEY ? "openai" : "unconfigured") });
     }
 
     if (request.method === "POST" && url.pathname === "/api/auth/login") {
@@ -165,27 +165,42 @@ export default {
     if (!last || last.role !== "user" || last.content !== message) safeHistory.push({ role: "user", content: message });
 
     try {
-      const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: env.JANU_MODEL || "gpt-4o-mini",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT + "\\n" + modeNote },
-            ...safeHistory
-          ]
-        })
-      });
-      const result = await upstream.json();
-      if (!upstream.ok) return json({ error: result.error?.message || "AI provider request failed." }, 502);
-      const reply = result.choices?.[0]?.message?.content;
-      if (!reply) return json({ error: "AI provider returned an empty response." }, 502);
-      return json({ reply });
-    } catch {
-      return json({ error: "Could not reach the AI provider." }, 502);
+      const messages = [
+        { role: "system", content: SYSTEM_PROMPT + "\\n" + modeNote },
+        ...safeHistory
+      ];
+
+      // Prefer Cloudflare Workers AI: it has a daily free allocation on Workers Free.
+      if (env.AI) {
+        const result = await env.AI.run(env.JANU_MODEL || "@cf/meta/llama-3.1-8b-instruct", { messages });
+        const reply = result?.response || result?.choices?.[0]?.message?.content;
+        if (!reply) return json({ error: "Cloudflare AI returned an empty response. The free daily allowance may be exhausted; try again after it resets." }, 502);
+        return json({ reply, provider: "cloudflare-workers-ai" });
+      }
+
+      // Keep OpenAI as an optional fallback for accounts that still configure it.
+      if (env.OPENAI_API_KEY) {
+        const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: env.OPENAI_MODEL || "gpt-4o-mini",
+            messages
+          })
+        });
+        const result = await upstream.json();
+        if (!upstream.ok) return json({ error: result.error?.message || "AI provider request failed." }, 502);
+        const reply = result.choices?.[0]?.message?.content;
+        if (!reply) return json({ error: "AI provider returned an empty response." }, 502);
+        return json({ reply, provider: "openai" });
+      }
+
+      return json({ error: "No AI provider is configured. Enable the Cloudflare Workers AI binding." }, 503);
+    } catch (error) {
+      return json({ error: error?.message || "Could not reach the AI provider." }, 502);
     }
   }
 };
