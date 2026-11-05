@@ -41,11 +41,53 @@ function analyzeSecurityEvent(event) {
   return { severity, findings, disclaimer: "Rule-based triage of user-supplied text only. No device, account, IP, or network was scanned or blocked." };
 }
 
-export default {
+
+function buildAuthorizedTestPlan(body) {
+  const asset = typeof body.asset === "string" ? body.asset.trim() : "";
+  const authorization = body.authorization === true;
+  const scope = Array.isArray(body.scope) ? body.scope.filter(x => typeof x === "string").slice(0, 12) : [];
+  if (!asset || asset.length > 240) {
+    return { error: "Provide an asset name or URL (maximum 240 characters)." };
+  }
+  if (!authorization) {
+    return { error: "Confirm that you own this asset or have written permission to test it." };
+  }
+  if (scope.length === 0) {
+    return { error: "Select at least one authorized test area." };
+  }
+  const allowed = new Set(["web-app", "api", "authentication", "configuration", "headers", "dependencies"]);
+  const selected = [...new Set(scope)].filter(item => allowed.has(item));
+  if (selected.length === 0) return { error: "No supported test areas were selected." };
+
+  const catalogue = {
+    "web-app": ["Review input validation and output encoding in a staging environment.", "Check access-control boundaries using test accounts you control."],
+    "api": ["Review API authentication, authorization and object-level access controls.", "Check schema validation, rate limits and error handling with non-destructive test cases."],
+    "authentication": ["Verify MFA, password reset, session expiry and account recovery controls.", "Review lockout and alert policies without attempting credential attacks."],
+    "configuration": ["Review exposed services and security configuration against an approved baseline.", "Confirm administrative interfaces are restricted to authorized operators."],
+    "headers": ["Review HTTPS, HSTS, CSP, framing and cookie security attributes.", "Check CORS policy against the documented application origins."],
+    "dependencies": ["Inventory dependencies and compare versions with trusted vulnerability advisories.", "Prioritize supported upgrades and verify fixes in staging."]
+  };
+  return {
+    asset,
+    authorized: true,
+    plan: selected.flatMap(area => catalogue[area].map(test => ({ area, test }))),
+    safety: "Planning only. This endpoint does not connect to, scan, exploit, or modify the named asset. Run tests only against assets explicitly in scope, preferably in staging, and stop if service impact occurs."
+  };
+}
+\nexport default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/health") {
       return json({ ok: true, service: "janu-ai-api", configured: Boolean(env.OPENAI_API_KEY) });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/security/plan") {
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: "Request body must be valid JSON." }, 400); }
+      const result = buildAuthorizedTestPlan(body);
+      if (result.error) return json({ error: result.error }, 400);
+      return json(result);
     }
 
     if (request.method === "POST" && url.pathname === "/api/security/analyze") {
