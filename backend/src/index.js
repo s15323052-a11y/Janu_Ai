@@ -112,6 +112,37 @@ export default {
       if (!await verifyOwnerSession(token, env.JANU_OWNER_SECRET)) return json({ error: "Owner authentication required or session expired." }, 401);
     }
 
+    // Persistent owner-controlled memory. Requires a Cloudflare KV namespace binding named JANU_MEMORY.
+    if (url.pathname === "/api/memory" && request.method === "GET") {
+      if (!env.JANU_MEMORY) return json({ error: "Persistent memory storage is not connected yet. Configure the JANU_MEMORY KV binding." }, 503);
+      const keys = await env.JANU_MEMORY.list({ prefix: "memory:" });
+      const items = [];
+      for (const key of keys.keys.slice(0, 100)) {
+        const value = await env.JANU_MEMORY.get(key.name, "json");
+        if (value) items.push({ id: key.name.slice(7), text: value.text, createdAt: value.createdAt });
+      }
+      return json({ items });
+    }
+
+    if (url.pathname === "/api/memory" && request.method === "POST") {
+      if (!env.JANU_MEMORY) return json({ error: "Persistent memory storage is not connected yet. Configure the JANU_MEMORY KV binding." }, 503);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON." }, 400); }
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text || text.length > 1000) return json({ error: "Memory text is required and must be under 1,000 characters." }, 400);
+      const id = crypto.randomUUID();
+      await env.JANU_MEMORY.put("memory:" + id, JSON.stringify({ text, createdAt: new Date().toISOString() }));
+      return json({ saved: true, id }, 201);
+    }
+
+    if (url.pathname.startsWith("/api/memory/") && request.method === "DELETE") {
+      if (!env.JANU_MEMORY) return json({ error: "Persistent memory storage is not connected yet. Configure the JANU_MEMORY KV binding." }, 503);
+      const id = decodeURIComponent(url.pathname.slice("/api/memory/".length));
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "Invalid memory ID." }, 400);
+      await env.JANU_MEMORY.delete("memory:" + id);
+      return json({ deleted: true });
+    }
+
     if (request.method === "POST" && url.pathname === "/api/security/plan") {
       let body;
       try { body = await request.json(); }
