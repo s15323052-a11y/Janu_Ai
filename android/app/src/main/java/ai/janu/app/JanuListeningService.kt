@@ -17,6 +17,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -42,6 +43,7 @@ class JanuListeningService : Service(), RecognitionListener, TextToSpeech.OnInit
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
         ownerToken = intent?.getStringExtra(EXTRA_OWNER_TOKEN).orEmpty()
         if (ownerToken.isBlank()) { stopSelf(); return START_NOT_STICKY }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) { stopSelf(); return START_NOT_STICKY }
@@ -52,6 +54,12 @@ class JanuListeningService : Service(), RecognitionListener, TextToSpeech.OnInit
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.forLanguageTag("hi-IN")
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) { speaking = true }
+                override fun onDone(utteranceId: String?) { main.post { speaking = false; startRecognition() } }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) { main.post { speaking = false; startRecognition() } }
+            })
             ready = true
         }
     }
@@ -127,11 +135,8 @@ class JanuListeningService : Service(), RecognitionListener, TextToSpeech.OnInit
     private fun speak(text: String) {
         if (!ready || text.isBlank()) { main.postDelayed({ startRecognition() }, 700); return }
         speaking = true
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "janu-${System.currentTimeMillis()}")
-        main.postDelayed({
-            speaking = false
-            startRecognition()
-        }, (text.length * 65L).coerceIn(1800L, 12000L))
+        val utteranceId = "janu-" + System.currentTimeMillis()
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     override fun onError(error: Int) {
