@@ -243,6 +243,41 @@ export default {
         ...safeHistory
       ];
 
+      // Explicit web-search requests use the OpenAI Responses API web_search tool.
+      // Ordinary chat stays on the configured low-latency provider path below.
+      const wantsWebSearch = /\\b(search|web search|google it|look up online|latest news)\\b|वेब\\s*(पर|में)?\\s*(सर्च|खोज)|इंटरनेट\\s*(पर|में)\\s*(खोज|सर्च)|ऑनलाइन\\s*(खोज|सर्च)|ताज़ा खबर|लेटेस्ट खबर/i.test(message);
+      if (wantsWebSearch) {
+        if (!env.OPENAI_API_KEY) {
+          return json({ error: "Web Search के लिए Cloudflare में OPENAI_API_KEY secret configure करना होगा।" }, 503);
+        }
+        const searchInput = safeHistory.map(item => ({ role: item.role, content: item.content }));
+        const upstream = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: env.JANU_SEARCH_MODEL || "gpt-4.1-mini",
+            instructions: "You are JANU AI. The user explicitly requested web search. Use the web_search tool, prioritize recent reliable sources, distinguish verified facts from uncertainty, and include source links in your answer. Respond in the user's language.",
+            input: searchInput,
+            tools: [{ type: "web_search" }],
+            tool_choice: "auto"
+          })
+        });
+        const result = await upstream.json();
+        if (!upstream.ok) return json({ error: result.error?.message || "Web Search provider request failed." }, 502);
+        const reply = result.output
+          ?.filter(item => item.type === "message")
+          .flatMap(item => item.content || [])
+          .filter(item => item.type === "output_text")
+          .map(item => item.text)
+          .join("\\n")
+          .trim();
+        if (!reply) return json({ error: "Web Search returned no readable answer." }, 502);
+        return json({ reply, provider: "openai-web-search", searched: true });
+      }
+
       // Prefer Cloudflare Workers AI: it has a daily free allocation on Workers Free.
       if (env.AI) {
         const result = await env.AI.run(env.JANU_MODEL || "@cf/meta/llama-3.1-8b-instruct", { messages });
