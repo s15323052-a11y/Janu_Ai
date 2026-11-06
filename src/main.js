@@ -41,6 +41,9 @@ app.innerHTML = `
           <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
           <button id="stop-speaking" type="button">⏹ रोकें</button>
           <button id="realtime-toggle" type="button" aria-pressed="false">☎ JANU Live से जुड़ें</button>
+          <button id="device-admin-button" type="button">फोन लॉक अनुमति दें</button>
+          <button id="locked-listening-button" type="button">लॉक स्क्रीन पर JANU सुनना चालू करें</button>
+          <button id="stop-locked-listening-button" type="button">लॉक स्क्रीन सुनना बंद करें</button>
         </div>
         <p id="voice-status" class="hint" aria-live="polite">एक बार “JANU Live” चालू करें। फिर बिना दोबारा बटन दबाए सीधे बोलते रहें; बातचीत रोकने के लिए Live बंद करें।</p>
         <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button id="voice-input" class="voice-chat-button" type="button" aria-label="Talk to JANU" title="Talk to JANU" aria-pressed="false">🎙</button><button class="send-chat-button" aria-label="Send message" type="submit">➤</button></form>
@@ -134,6 +137,35 @@ const speakReplies = document.querySelector("#speak-replies");
 const voiceStatus = document.querySelector("#voice-status");
 
 const realtimeToggle = document.querySelector("#realtime-toggle");
+const deviceAdminButton = document.querySelector("#device-admin-button");
+const lockedListeningButton = document.querySelector("#locked-listening-button");
+const stopLockedListeningButton = document.querySelector("#stop-locked-listening-button");
+
+deviceAdminButton?.addEventListener("click", () => {
+  if (!window.JanuAndroid?.requestDeviceAdmin) {
+    voiceStatus.textContent = "फोन लॉक अनुमति केवल JANU Android APK में उपलब्ध होगी।";
+    return;
+  }
+  window.JanuAndroid.requestDeviceAdmin();
+});
+lockedListeningButton?.addEventListener("click", () => {
+  if (!window.JanuAndroid?.startLockedListening) {
+    voiceStatus.textContent = "लॉक स्क्रीन voice के लिए JANU Android APK install करना होगा।";
+    return;
+  }
+  if (!ownerToken) {
+    voiceStatus.textContent = "पहले JANU Owner Login करें।";
+    return;
+  }
+  window.JanuAndroid.startLockedListening(ownerToken);
+  voiceStatus.textContent = "Android अनुमति माँगेगा। अनुमति मिलने पर JANU notification के साथ सुनना शुरू करेगी।";
+});
+stopLockedListeningButton?.addEventListener("click", () => {
+  if (window.JanuAndroid?.stopLockedListening) {
+    window.JanuAndroid.stopLockedListening();
+    voiceStatus.textContent = "लॉक स्क्रीन listening बंद करने का अनुरोध भेजा गया।";
+  }
+});
 let realtimePeer = null;
 let realtimeStream = null;
 let realtimeAudio = null;
