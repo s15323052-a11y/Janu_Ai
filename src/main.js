@@ -42,7 +42,7 @@ app.innerHTML = `
           <button id="stop-speaking" type="button">⏹ रोकें</button>
           <button id="realtime-toggle" type="button" aria-pressed="false">☎ JANU Live से जुड़ें</button>
         </div>
-        <p id="voice-status" class="hint" aria-live="polite">बात करने के लिए नीचे माइक दबाएँ। JANU जवाब लिखेगा और बोलकर भी सुनाएगा।</p>
+        <p id="voice-status" class="hint" aria-live="polite">एक बार “JANU Live” चालू करें। फिर बिना दोबारा बटन दबाए सीधे बोलते रहें; बातचीत रोकने के लिए Live बंद करें।</p>
         <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button id="voice-input" class="voice-chat-button" type="button" aria-label="Talk to JANU" title="Talk to JANU" aria-pressed="false">🎙</button><button class="send-chat-button" aria-label="Send message" type="submit">➤</button></form>
         <p class="hint">Do not enter passwords, API keys or other secrets in chat. Voice input is processed by your browser/device speech service.</p>
       </section>
@@ -142,7 +142,14 @@ let realtimeChannel = null;
 function setRealtimeState(connected, message) {
   if (realtimeToggle) {
     realtimeToggle.setAttribute("aria-pressed", connected ? "true" : "false");
-    realtimeToggle.textContent = connected ? "☎ JANU Live बंद करें" : "☎ JANU Live से जुड़ें";
+    realtimeToggle.textContent = connected ? "☎ JANU Live बंद करें" : "☎ एक बार JANU Live चालू करें";
+  }
+  // The separate push-to-talk control is not needed during a live WebRTC session.
+  if (voiceInputButton) {
+    voiceInputButton.disabled = connected;
+    voiceInputButton.hidden = connected;
+    voiceInputButton.setAttribute("aria-pressed", connected ? "true" : "false");
+    voiceInputButton.title = connected ? "JANU Live चालू है—सीधे बोलें" : "Live चालू करने के लिए JANU Live बटन दबाएँ";
   }
   if (message) voiceStatus.textContent = message;
 }
@@ -203,7 +210,7 @@ async function startRealtimeVoice() {
 
   realtimeChannel = realtimePeer.createDataChannel("oai-events");
   realtimeChannel.addEventListener("open", () => {
-    setRealtimeState(true, "JANU Live जुड़ गया है। अब सीधे बोलिए, बातचीत real-time में होगी।");
+    setRealtimeState(true, "JANU Live चालू है। अब हर सवाल के लिए बटन दबाने की जरूरत नहीं—सीधे बोलते रहें। रोकने के लिए “JANU Live बंद करें” दबाएँ।");
   });
   realtimeChannel.addEventListener("message", event => {
     try {
@@ -323,7 +330,7 @@ voiceInputButton?.addEventListener("click", () => {
   recognition = activeRecognition;
   activeRecognition.lang = voiceLanguage.value;
   activeRecognition.interimResults = false;
-  activeRecognition.continuous = false;
+  activeRecognition.continuous = true;
   activeRecognition.maxAlternatives = 1;
   activeRecognition.onstart = () => {
     voiceInputButton.textContent = "⏹ सुनना बंद करें";
