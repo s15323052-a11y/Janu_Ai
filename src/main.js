@@ -40,13 +40,13 @@ app.innerHTML = `
           <select id="voice-type"><option value="female">महिला</option><option value="male">पुरुष</option></select>
           <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
           <button id="stop-speaking" type="button">⏹ रोकें</button>
-          <button id="realtime-toggle" type="button" aria-pressed="false">☎ JANU Live से जुड़ें</button>
           <button id="free-voice-toggle" type="button" aria-pressed="false">♧ JANU Free Voice चालू करें</button>
+          <button id="realtime-toggle" type="button" aria-pressed="false">JANU Live (OpenAI paid mode)</button>
           <button id="device-admin-button" type="button">फोन लॉक अनुमति दें</button>
           <button id="locked-listening-button" type="button">लॉक स्क्रीन पर JANU सुनना चालू करें</button>
           <button id="stop-locked-listening-button" type="button">लॉक स्क्रीन सुनना बंद करें</button>
         </div>
-        <p id="voice-status" class="hint" aria-live="polite">एक बार “JANU Live” चालू करें। फिर बिना दोबारा बटन दबाए सीधे बोलते रहें; बातचीत रोकने के लिए Live बंद करें।</p>
+        <p id="voice-status" class="hint" aria-live="polite">मुफ्त इस्तेमाल के लिए “JANU Free Voice” चालू करें। यह फोन/ब्राउज़र की speech सुविधा और Cloudflare Workers AI चैट इस्तेमाल करता है। OpenAI JANU Live वैकल्पिक paid सुविधा है।</p>
         <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button id="voice-input" class="voice-chat-button" type="button" aria-label="Talk to JANU" title="Talk to JANU" aria-pressed="false">🎙</button><button class="send-chat-button" aria-label="Send message" type="submit">➤</button></form>
         <p class="hint">Do not enter passwords, API keys or other secrets in chat. Voice input is processed by your browser/device speech service.</p>
       </section>
@@ -138,6 +138,7 @@ const speakReplies = document.querySelector("#speak-replies");
 const voiceStatus = document.querySelector("#voice-status");
 
 const realtimeToggle = document.querySelector("#realtime-toggle");
+if (realtimeToggle) realtimeToggle.title = "वैकल्पिक: OpenAI Realtime API; इसके लिए अलग paid API credits लग सकते हैं। मुफ्त इस्तेमाल के लिए JANU Free Voice दबाएँ।";
 const freeVoiceToggle = document.querySelector("#free-voice-toggle");
 let freeVoiceEnabled = false;
 let freeRecognition = null;
