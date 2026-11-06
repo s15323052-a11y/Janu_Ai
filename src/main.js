@@ -41,6 +41,7 @@ app.innerHTML = `
           <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
           <button id="stop-speaking" type="button">⏹ रोकें</button>
           <button id="realtime-toggle" type="button" aria-pressed="false">☎ JANU Live से जुड़ें</button>
+          <button id="free-voice-toggle" type="button" aria-pressed="false">♧ JANU Free Voice चालू करें</button>
           <button id="device-admin-button" type="button">फोन लॉक अनुमति दें</button>
           <button id="locked-listening-button" type="button">लॉक स्क्रीन पर JANU सुनना चालू करें</button>
           <button id="stop-locked-listening-button" type="button">लॉक स्क्रीन सुनना बंद करें</button>
@@ -137,6 +138,34 @@ const speakReplies = document.querySelector("#speak-replies");
 const voiceStatus = document.querySelector("#voice-status");
 
 const realtimeToggle = document.querySelector("#realtime-toggle");
+const freeVoiceToggle = document.querySelector("#free-voice-toggle");
+let freeVoiceEnabled = false;
+let freeRecognition = null;
+let freeVoiceRestartAfterReply = false;
+function stopFreeVoice(message = "JANU Free Voice बंद है।") {
+  freeVoiceEnabled = false;
+  freeVoiceRestartAfterReply = false;
+  if (freeRecognition) { const active = freeRecognition; freeRecognition = null; try { active.onend = null; active.stop(); } catch {} }
+  if (freeVoiceToggle) { freeVoiceToggle.setAttribute("aria-pressed", "false"); freeVoiceToggle.textContent = "♧ JANU Free Voice चालू करें"; }
+  voiceStatus.textContent = message;
+}
+function listenFreeVoice() {
+  if (!freeVoiceEnabled || freeRecognition || freeVoiceRestartAfterReply) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { stopFreeVoice("इस browser में Speech Recognition उपलब्ध नहीं है।"); return; }
+  const active = new SR(); freeRecognition = active;
+  active.lang = voiceLanguage.value; active.continuous = false; active.interimResults = false; active.maxAlternatives = 1;
+  active.onstart = () => { voiceStatus.textContent = "JANU Free Voice सुन रही है… सीधे बोलें।"; };
+  active.onresult = event => { const spoken = event.results?.[event.resultIndex]?.[0]?.transcript?.trim(); if (spoken && freeVoiceEnabled) { freeVoiceRestartAfterReply = true; promptBox.value = spoken; form.requestSubmit(); } };
+  active.onerror = event => { if (["not-allowed","service-not-allowed"].includes(event.error)) stopFreeVoice("Microphone/Speech अनुमति नहीं मिली। Chrome में अनुमति Allow करें।"); else if (event.error !== "no-speech") voiceStatus.textContent = "Voice input: " + event.error; };
+  active.onend = () => { if (freeRecognition === active) freeRecognition = null; if (freeVoiceEnabled && !freeVoiceRestartAfterReply) setTimeout(listenFreeVoice, 500); };
+  try { active.start(); } catch { freeRecognition = null; setTimeout(listenFreeVoice, 1000); }
+}
+function startFreeVoice() {
+  if (!window.isSecureContext || !(window.SpeechRecognition || window.webkitSpeechRecognition)) { voiceStatus.textContent = "Free Voice के लिए HTTPS और समर्थित Android Chrome चाहिए।"; return; }
+  freeVoiceEnabled = true; freeVoiceToggle?.setAttribute("aria-pressed","true"); if (freeVoiceToggle) freeVoiceToggle.textContent = "♧ JANU Free Voice बंद करें"; listenFreeVoice();
+}
+freeVoiceToggle?.addEventListener("click", () => freeVoiceEnabled ? stopFreeVoice() : startFreeVoice());
 const deviceAdminButton = document.querySelector("#device-admin-button");
 const lockedListeningButton = document.querySelector("#locked-listening-button");
 const stopLockedListeningButton = document.querySelector("#stop-locked-listening-button");
@@ -361,7 +390,7 @@ function speakText(text) {
   utterance.voice = matching.find(v => genderWords.test(v.name)) || matching[0] || null;
   utterance.rate = 1;
   utterance.onstart = () => { voiceStatus.textContent = "JANU जवाब बोल रहा है…"; };
-  utterance.onend = () => { voiceStatus.textContent = "जवाब पूरा हुआ। फिर से बोलने के लिए माइक दबाएँ।"; };
+  utterance.onend = () => { voiceStatus.textContent = freeVoiceEnabled ? "JANU फिर सुन रही है… सीधे बोलें।" : "जवाब पूरा हुआ।"; if (freeVoiceEnabled) { freeVoiceRestartAfterReply = false; setTimeout(listenFreeVoice, 350); } };
   utterance.onerror = (event) => { voiceStatus.textContent = "आवाज़ सुनाने में समस्या: " + (event.error || "unknown"); };
   window.speechSynthesis.speak(utterance);
 }
