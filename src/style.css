@@ -19,3 +19,9 @@
 .composer .voice-chat-button[aria-pressed="true"]{background:#744ee8;border-color:#b4a6ff;box-shadow:0 0 0 4px #8b82ff33}
 .composer .send-chat-button{flex:0 0 46px;width:46px;height:46px}
 @media(max-width:520px){.composer{gap:7px;padding:8px}.composer textarea{min-width:0;padding:8px}.composer .voice-chat-button,.composer .send-chat-button{flex-basis:42px;width:42px;height:42px}}
+
+
+/* Realtime voice session control */
+#realtime-toggle{border:1px solid #7c70ed;background:#392e72;color:#fff;border-radius:10px;padding:9px 12px;font:inherit;font-weight:700;cursor:pointer}
+#realtime-toggle[aria-pressed="true"]{background:#176b62;border-color:#4fd1b5;box-shadow:0 0 0 3px #4fd1b533}
+#realtime-toggle:disabled{opacity:.6;cursor:wait}
