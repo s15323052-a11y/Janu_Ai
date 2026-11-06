@@ -372,7 +372,7 @@ voiceLanguage?.addEventListener("change", () => {
   voiceStatus.textContent = "भाषा बदल गई। अगली voice command नई भाषा में होगी।";
 });
 
-function addMessage(role, text) {
+function addMessage(role, text, options = {}) {
   const item = document.createElement("div");
   item.className = `message ${role}`;
   const label = document.createElement("strong");
@@ -382,7 +382,7 @@ function addMessage(role, text) {
   item.append(label, body);
   messages.append(item);
   item.scrollIntoView({ behavior: "smooth", block: "end" });
-  if (role === "assistant" && arguments[2]?.speak !== false) speakText(text);
+  if (role === "assistant" && options.speak !== false) speakText(text);
 }
 
 toggle.addEventListener("change", () => {
