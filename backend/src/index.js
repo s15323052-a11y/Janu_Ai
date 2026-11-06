@@ -112,6 +112,52 @@ export default {
       if (!await verifyOwnerSession(token, env.JANU_OWNER_SECRET)) return json({ error: "Owner authentication required or session expired." }, 401);
     }
 
+    // Create a short-lived browser credential for low-latency, speech-to-speech WebRTC.
+    // The permanent OpenAI API key remains on the Worker and is never returned to the browser.
+    if (request.method === "POST" && url.pathname === "/api/realtime/session") {
+      if (!env.OPENAI_API_KEY) {
+        return json({ error: "Realtime voice is not configured. Add OPENAI_API_KEY as a Cloudflare Worker secret." }, 503);
+      }
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: "Request body must be valid JSON." }, 400); }
+      const allowedVoices = new Set(["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"]);
+      const voice = typeof body.voice === "string" && allowedVoices.has(body.voice) ? body.voice : "marin";
+      try {
+        const upstream = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            expires_after: { anchor: "created_at", seconds: 600 },
+            session: {
+              type: "realtime",
+              model: "gpt-realtime",
+              instructions: "You are JANU AI, a warm, helpful personal voice assistant. Speak naturally and concisely. Understand and respond in Hindi or English according to the user's language. Do not claim to perform actions unless a connected tool actually performed them.",
+              output_modalities: ["audio"],
+              audio: {
+                input: {
+                  transcription: { model: "gpt-4o-mini-transcribe" },
+                  turn_detection: { type: "server_vad" }
+                },
+                output: { voice }
+              }
+            })
+          })
+        });
+        const result = await upstream.json();
+        if (!upstream.ok) {
+          return json({ error: result.error?.message || "Could not create a realtime voice session." }, 502);
+        }
+        if (!result.value) return json({ error: "Realtime provider returned no temporary client credential." }, 502);
+        return json({ clientSecret: result.value, expiresAt: result.expires_at, session: result.session });
+      } catch (error) {
+        return json({ error: error?.message || "Realtime voice service is unavailable." }, 502);
+      }
+    }
+
     // Persistent owner-controlled memory. Requires a Cloudflare KV namespace binding named JANU_MEMORY.
     if (url.pathname === "/api/memory" && request.method === "GET") {
       if (!env.JANU_MEMORY) return json({ error: "Persistent memory storage is not connected yet. Configure the JANU_MEMORY KV binding." }, 503);
