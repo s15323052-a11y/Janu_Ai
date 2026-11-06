@@ -236,17 +236,38 @@ async function startRealtimeVoice() {
 
   const offer = await realtimePeer.createOffer();
   await realtimePeer.setLocalDescription(offer);
+
+  // Wait until ICE candidates are included in the SDP before sending it.
+  if (realtimePeer.iceGatheringState !== "complete") {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        realtimePeer.removeEventListener("icegatheringstatechange", onIceState);
+        reject(new Error("ICE candidates जुटाने में समय समाप्त हुआ। Internet बदलकर फिर कोशिश करें।"));
+      }, 12000);
+      function onIceState() {
+        if (realtimePeer?.iceGatheringState !== "complete") return;
+        clearTimeout(timeout);
+        realtimePeer.removeEventListener("icegatheringstatechange", onIceState);
+        resolve();
+      }
+      realtimePeer.addEventListener("icegatheringstatechange", onIceState);
+      onIceState();
+    });
+  }
+
+  const localSdp = realtimePeer.localDescription?.sdp;
+  if (!localSdp) throw new Error("WebRTC SDP offer नहीं बना।");
   const answerResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + sessionData.clientSecret,
       "Content-Type": "application/sdp"
     },
-    body: offer.sdp
+    body: localSdp
   });
   if (!answerResponse.ok) {
     const errorText = await answerResponse.text();
-    throw new Error("Realtime connection अस्वीकार हुआ: " + errorText.slice(0, 240));
+    throw new Error("Realtime HTTP " + answerResponse.status + ": " + errorText.slice(0, 500));
   }
   const answerSdp = await answerResponse.text();
   await realtimePeer.setRemoteDescription({ type: "answer", sdp: answerSdp });
