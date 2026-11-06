@@ -138,6 +138,14 @@ let realtimePeer = null;
 let realtimeStream = null;
 let realtimeAudio = null;
 let realtimeChannel = null;
+let realtimeWakeLock = null;
+
+async function acquireRealtimeWakeLock() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  try { realtimeWakeLock = await navigator.wakeLock.request('screen'); }
+  catch { voiceStatus.textContent = 'Live चालू है; फोन की battery settings के कारण screen awake नहीं रखी जा सकी।'; }
+  realtimeWakeLock?.addEventListener('release', () => { realtimeWakeLock = null; });
+}
 
 function setRealtimeState(connected, message) {
   if (realtimeToggle) {
@@ -155,6 +163,7 @@ function setRealtimeState(connected, message) {
 }
 
 async function stopRealtimeVoice(message = "JANU Live कनेक्शन बंद हो गया।") {
+  if (realtimeWakeLock) { try { await realtimeWakeLock.release(); } catch {} realtimeWakeLock = null; }
   if (realtimeChannel) {
     try { realtimeChannel.close(); } catch {}
     realtimeChannel = null;
@@ -272,6 +281,10 @@ async function startRealtimeVoice() {
   const answerSdp = await answerResponse.text();
   await realtimePeer.setRemoteDescription({ type: "answer", sdp: answerSdp });
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && realtimePeer?.connectionState === 'connected') acquireRealtimeWakeLock();
+});
 
 realtimeToggle?.addEventListener("click", async () => {
   if (realtimePeer) {
