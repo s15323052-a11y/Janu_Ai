@@ -374,7 +374,10 @@ if ("speechSynthesis" in window) {
 }
 
 function speakText(text) {
-  if (!speakReplies.checked) return;
+  if (!speakReplies.checked) {
+    if (freeVoiceEnabled) { freeVoiceRestartAfterReply = false; setTimeout(listenFreeVoice, 250); }
+    return;
+  }
   if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
     voiceStatus.textContent = "इस ब्राउज़र में बोलकर जवाब सुनाने की सुविधा उपलब्ध नहीं है।";
     return;
