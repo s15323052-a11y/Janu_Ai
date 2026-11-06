@@ -43,6 +43,17 @@ Before production use, add owner authentication, server-side authorization, rate
 
 ## Personal phone-control and conversation roadmap
 
+The target experience includes BOTH interaction modes: (1) full in-app control while JANU is open, and (2) an optional background wake-word mode when the owner explicitly enables it. Background activation must be implemented using Android-supported microphone/foreground-service behavior, a persistent user-visible notification where required, battery-optimization guidance where appropriate, and clear start/stop controls. It must not imply that Android permits unrestricted hidden always-on microphone access.
+
+JANU is intended to become an owner-controlled Android personal assistant with natural Hindi/English conversation and user-selectable voice presentation. Planned Android capabilities include launching apps, opening system settings, managing alarms and reminders, preparing calls/messages, and carrying out other supported tasks through Android intents and narrowly scoped permissions.
+
+Implementation must use Android's supported permission and role model. Accessibility Service, notification access, contacts, microphone, camera, call/SMS roles, and file access must each be requested only when a feature genuinely needs them, with clear disclosure and revocable controls. High-impact actions such as sending messages, placing calls, purchases, deleting files, changing security settings, or sharing private data require an appropriate confirmation step. JANU must never silently bypass Android security, other apps' protections, or user consent.
+
+Conversation style should be natural, candid, and non-judgmental, including mature discussion of lawful adult topics where supported by the selected AI provider and applicable law. A preference setting may control tone and maturity; it cannot disable safeguards against exploitation, sexual content involving minors, non-consensual intimate content, serious harm, or illegal activity. The preference is not an age-verification system.
+
+A future animated 3D avatar is a separate visual milestone; it is not yet implemented. Real-time speech-to-speech, Android phone-control integrations, and avatar rendering must each be built and tested before being described as available.
+
+
 JANU is intended to become an owner-controlled Android personal assistant with natural Hindi/English conversation and user-selectable voice presentation. Planned Android capabilities include launching apps, opening system settings, managing alarms and reminders, preparing calls/messages, and carrying out other supported tasks through Android intents and narrowly scoped permissions.
 
 Implementation must use Android's supported permission and role model. Accessibility Service, notification access, contacts, microphone, camera, call/SMS roles, and file access must each be requested only when a feature genuinely needs them, with clear disclosure and revocable controls. High-impact actions such as sending messages, placing calls, purchases, deleting files, changing security settings, or sharing private data require an appropriate confirmation step. JANU must never silently bypass Android security, other apps' protections, or user consent.
