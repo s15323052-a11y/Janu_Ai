@@ -144,8 +144,8 @@ export default {
                 },
                 output: { voice }
               }
-            })
-          });
+            }
+          })
         const result = await upstream.json();
         if (!upstream.ok) {
           return json({ error: result.error?.message || "Could not create a realtime voice session." }, 502);
