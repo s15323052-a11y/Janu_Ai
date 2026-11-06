@@ -40,6 +40,7 @@ app.innerHTML = `
           <select id="voice-type"><option value="female">महिला</option><option value="male">पुरुष</option></select>
           <label class="speak-toggle"><input id="speak-replies" type="checkbox" checked> जवाब बोलकर सुनाएँ</label>
           <button id="stop-speaking" type="button">⏹ रोकें</button>
+          <button id="realtime-toggle" type="button" aria-pressed="false">☎ JANU Live से जुड़ें</button>
         </div>
         <p id="voice-status" class="hint" aria-live="polite">बात करने के लिए नीचे माइक दबाएँ। JANU जवाब लिखेगा और बोलकर भी सुनाएगा।</p>
         <form id="chat-form" class="composer"><textarea id="prompt" rows="1" placeholder="Message JANU AI..." required></textarea><button id="voice-input" class="voice-chat-button" type="button" aria-label="Talk to JANU" title="Talk to JANU" aria-pressed="false">🎙</button><button class="send-chat-button" aria-label="Send message" type="submit">➤</button></form>
@@ -131,6 +132,135 @@ const voiceLanguage = document.querySelector("#voice-language");
 const voiceType = document.querySelector("#voice-type");
 const speakReplies = document.querySelector("#speak-replies");
 const voiceStatus = document.querySelector("#voice-status");
+
+const realtimeToggle = document.querySelector("#realtime-toggle");
+let realtimePeer = null;
+let realtimeStream = null;
+let realtimeAudio = null;
+let realtimeChannel = null;
+
+function setRealtimeState(connected, message) {
+  if (realtimeToggle) {
+    realtimeToggle.setAttribute("aria-pressed", connected ? "true" : "false");
+    realtimeToggle.textContent = connected ? "☎ JANU Live बंद करें" : "☎ JANU Live से जुड़ें";
+  }
+  if (message) voiceStatus.textContent = message;
+}
+
+async function stopRealtimeVoice(message = "JANU Live कनेक्शन बंद हो गया।") {
+  if (realtimeChannel) {
+    try { realtimeChannel.close(); } catch {}
+    realtimeChannel = null;
+  }
+  if (realtimePeer) {
+    try { realtimePeer.close(); } catch {}
+    realtimePeer = null;
+  }
+  if (realtimeStream) {
+    realtimeStream.getTracks().forEach(track => track.stop());
+    realtimeStream = null;
+  }
+  if (realtimeAudio) {
+    realtimeAudio.pause();
+    realtimeAudio.srcObject = null;
+    realtimeAudio.remove();
+    realtimeAudio = null;
+  }
+  setRealtimeState(false, message);
+}
+
+async function startRealtimeVoice() {
+  if (!window.isSecureContext) throw new Error("Live Voice केवल सुरक्षित HTTPS वेबसाइट पर चलेगा।");
+  if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+    throw new Error("इस browser में WebRTC microphone सुविधा उपलब्ध नहीं है। Android Chrome में खोलें।");
+  }
+  voiceStatus.textContent = "Microphone permission माँगी जा रही है…";
+  realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const selectedVoice = voiceType.value === "female" ? "coral" : "ash";
+  const sessionResponse = await ownerFetch(apiUrl("/api/realtime/session"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voice: selectedVoice })
+  });
+  const sessionData = await sessionResponse.json();
+  if (!sessionResponse.ok || !sessionData.clientSecret) {
+    throw new Error(sessionData.error || "Realtime session नहीं बन पाया।");
+  }
+
+  realtimePeer = new RTCPeerConnection();
+  realtimeAudio = document.createElement("audio");
+  realtimeAudio.autoplay = true;
+  realtimeAudio.playsInline = true;
+  realtimeAudio.setAttribute("aria-label", "JANU Live voice response");
+  document.body.append(realtimeAudio);
+  realtimePeer.ontrack = event => {
+    realtimeAudio.srcObject = event.streams[0];
+    realtimeAudio.play().catch(() => {
+      voiceStatus.textContent = "JANU की आवाज़ सुनने के लिए फोन का media playback चालू करें।";
+    });
+  };
+  realtimeStream.getTracks().forEach(track => realtimePeer.addTrack(track, realtimeStream));
+
+  realtimeChannel = realtimePeer.createDataChannel("oai-events");
+  realtimeChannel.addEventListener("open", () => {
+    setRealtimeState(true, "JANU Live जुड़ गया है। अब सीधे बोलिए, बातचीत real-time में होगी।");
+  });
+  realtimeChannel.addEventListener("message", event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === "conversation.item.input_audio_transcription.completed" && data.transcript) {
+        addMessage("user", data.transcript);
+      } else if (data.type === "response.output_audio_transcript.done" && data.transcript) {
+        addMessage("assistant", data.transcript, { speak: false });
+      } else if (data.type === "error") {
+        voiceStatus.textContent = "Live Voice त्रुटि: " + (data.error?.message || "अज्ञात समस्या");
+      }
+    } catch {
+      // Ignore non-JSON provider events.
+    }
+  });
+  realtimePeer.addEventListener("connectionstatechange", () => {
+    if (realtimePeer?.connectionState === "failed") {
+      stopRealtimeVoice("Live connection विफल हुआ। Internet जाँचकर फिर कोशिश करें।");
+    } else if (realtimePeer?.connectionState === "disconnected") {
+      voiceStatus.textContent = "Live connection अस्थायी रूप से disconnect हुआ है…";
+    }
+  });
+
+  const offer = await realtimePeer.createOffer();
+  await realtimePeer.setLocalDescription(offer);
+  const answerResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + sessionData.clientSecret,
+      "Content-Type": "application/sdp"
+    },
+    body: offer.sdp
+  });
+  if (!answerResponse.ok) {
+    const errorText = await answerResponse.text();
+    throw new Error("Realtime connection अस्वीकार हुआ: " + errorText.slice(0, 240));
+  }
+  const answerSdp = await answerResponse.text();
+  await realtimePeer.setRemoteDescription({ type: "answer", sdp: answerSdp });
+}
+
+realtimeToggle?.addEventListener("click", async () => {
+  if (realtimePeer) {
+    await stopRealtimeVoice();
+    return;
+  }
+  realtimeToggle.disabled = true;
+  try {
+    await startRealtimeVoice();
+  } catch (error) {
+    await stopRealtimeVoice("Live Voice शुरू नहीं हुआ: " + error.message);
+  } finally {
+    realtimeToggle.disabled = false;
+  }
+});
+
+
 
 function loadSpeechVoices() {
   if (!("speechSynthesis" in window)) return;
@@ -252,7 +382,7 @@ function addMessage(role, text) {
   item.append(label, body);
   messages.append(item);
   item.scrollIntoView({ behavior: "smooth", block: "end" });
-  if (role === "assistant") speakText(text);
+  if (role === "assistant" && arguments[2]?.speak !== false) speakText(text);
 }
 
 toggle.addEventListener("change", () => {
