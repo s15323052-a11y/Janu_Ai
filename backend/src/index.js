@@ -263,7 +263,7 @@ export default {
             const after = html.slice(pattern.lastIndex, pattern.lastIndex + 1800);
             const snippetMatch = after.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/div>/i);
             const snippet = snippetMatch ? decode(snippetMatch[1]) : "";
-            if (title && /^https?:\\/\\//i.test(href)) results.push({ title, url: href, snippet });
+            if (title && href.startsWith("http")) results.push({ title, url: href, snippet });
           }
           if (!results.length) return json({ error: "Free search ने इस बार कोई readable result नहीं लौटाया।" }, 502);
           const reply = "वेब पर मिले परिणाम (स्रोत खोलकर जानकारी की पुष्टि करें):\\n" + results.map((item, i) => (i + 1) + ". " + item.title + (item.snippet ? "\\n" + item.snippet : "") + "\\n" + item.url).join("\\n\\n");
