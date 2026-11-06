@@ -245,7 +245,7 @@ export default {
 
       // Explicit web-search requests use the OpenAI Responses API web_search tool.
       // Ordinary chat stays on the configured low-latency provider path below.
-      const wantsWebSearch = /\\b(search|web search|google it|look up online|latest news)\\b|वेब\\s*(पर|में)?\\s*(सर्च|खोज)|इंटरनेट\\s*(पर|में)\\s*(खोज|सर्च)|ऑनलाइन\\s*(खोज|सर्च)|ताज़ा खबर|लेटेस्ट खबर/i.test(message);
+      const wantsWebSearch = /\b(search|web search|google it|look up online|latest news)\b|वेब\s*(पर|में)?\s*(सर्च|खोज)|इंटरनेट\s*(पर|में)\s*(खोज|सर्च)|ऑनलाइन\s*(खोज|सर्च)|ताज़ा खबर|लेटेस्ट खबर/i.test(message);
       if (wantsWebSearch) {
         if (!env.OPENAI_API_KEY) {
           return json({ error: "Web Search के लिए Cloudflare में OPENAI_API_KEY secret configure करना होगा।" }, 503);
@@ -272,7 +272,7 @@ export default {
           .flatMap(item => item.content || [])
           .filter(item => item.type === "output_text")
           .map(item => item.text)
-          .join("\\n")
+          .join("\n")
           .trim();
         if (!reply) return json({ error: "Web Search returned no readable answer." }, 502);
         return json({ reply, provider: "openai-web-search", searched: true });
