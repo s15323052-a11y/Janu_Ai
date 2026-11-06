@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.PermissionRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -20,6 +21,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var webView: WebView
     private var pendingOwnerToken: String? = null
+    private var pendingWebPermission: PermissionRequest? = null
     private val adminComponent by lazy { ComponentName(this, JanuDeviceAdminReceiver::class.java) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,7 +30,19 @@ class MainActivity : Activity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.mediaPlaybackRequiresUserGesture = false
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE) &&
+                        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                    } else {
+                        pendingWebPermission = request
+                        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_WEB_MIC_PERMISSION)
+                    }
+                }
+            }
+        }
         webView.webViewClient = WebViewClient()
         webView.addJavascriptInterface(JanuBridge(), "JanuAndroid")
         setContentView(webView)
@@ -94,11 +108,20 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_WEB_MIC_PERMISSION) {
+            val request = pendingWebPermission
+            pendingWebPermission = null
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                request?.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+            } else {
+                request?.deny()
+            }
+        }
         if (requestCode == REQUEST_AUDIO_PERMISSIONS) {
             if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) startListeningService()
             else Toast.makeText(this, "Locked-screen voice के लिए microphone और notification अनुमति जरूरी है।", Toast.LENGTH_LONG).show()
         }
     }
 
-    companion object { private const val REQUEST_AUDIO_PERMISSIONS = 501 }
+    companion object { private const val REQUEST_AUDIO_PERMISSIONS = 501; private const val REQUEST_WEB_MIC_PERMISSION = 502 }
 }
