@@ -243,39 +243,34 @@ export default {
         ...safeHistory
       ];
 
-      // Explicit web-search requests use the OpenAI Responses API web_search tool.
-      // Ordinary chat stays on the configured low-latency provider path below.
-      const wantsWebSearch = /\b(search|web search|google it|look up online|latest news)\b|वेब\s*(पर|में)?\s*(सर्च|खोज)|इंटरनेट\s*(पर|में)\s*(खोज|सर्च)|ऑनलाइन\s*(खोज|सर्च)|ताज़ा खबर|लेटेस्ट खबर/i.test(message);
+      // Free web search via DuckDuckGo HTML results; no paid OpenAI API is required.
+      const wantsWebSearch = /\\b(search|web search|google it|look up online|latest news)\\b|वेब\\s*(पर|में)?\\s*(सर्च|खोज)|इंटरनेट\\s*(पर|में)\\s*(खोज|सर्च)|ऑनलाइन\\s*(खोज|सर्च)|ताज़ा खबर|लेटेस्ट खबर/i.test(message);
       if (wantsWebSearch) {
-        if (!env.OPENAI_API_KEY) {
-          return json({ error: "Web Search के लिए Cloudflare में OPENAI_API_KEY secret configure करना होगा।" }, 503);
+        try {
+          const query = message.replace(/^(.*?)(search|web search|खोज|सर्च)\\s*/i, "").trim() || message;
+          const upstream = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
+            headers: { "Accept": "text/html", "User-Agent": "Mozilla/5.0 (compatible; JANUAI/1.0)" }
+          });
+          if (!upstream.ok) return json({ error: "Free search service ने अभी जवाब नहीं दिया। थोड़ी देर बाद फिर कोशिश करें।" }, 502);
+          const html = await upstream.text();
+          const decode = value => value.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "").trim();
+          const results = [];
+          const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi;
+          let match;
+          while ((match = pattern.exec(html)) && results.length < 6) {
+            const href = match[1].replace(/&amp;/g, "&");
+            const title = decode(match[2]);
+            const after = html.slice(pattern.lastIndex, pattern.lastIndex + 1800);
+            const snippetMatch = after.match(/class="result__snippet"[^>]*>([\\s\\S]*?)<\\/div>/i);
+            const snippet = snippetMatch ? decode(snippetMatch[1]) : "";
+            if (title && /^https?:\\/\\//i.test(href)) results.push({ title, url: href, snippet });
+          }
+          if (!results.length) return json({ error: "Free search ने इस बार कोई readable result नहीं लौटाया।" }, 502);
+          const reply = "वेब पर मिले परिणाम (स्रोत खोलकर जानकारी की पुष्टि करें):\\n" + results.map((item, i) => (i + 1) + ". " + item.title + (item.snippet ? "\\n" + item.snippet : "") + "\\n" + item.url).join("\\n\\n");
+          return json({ reply, provider: "duckduckgo-html", searched: true, results });
+        } catch (error) {
+          return json({ error: "Free web search उपलब्ध नहीं है: " + (error?.message || "network error") }, 502);
         }
-        const searchInput = safeHistory.map(item => ({ role: item.role, content: item.content }));
-        const upstream = await fetch("https://api.openai.com/v1/responses", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: env.JANU_SEARCH_MODEL || "gpt-4.1-mini",
-            instructions: "You are JANU AI. The user explicitly requested web search. Use the web_search tool, prioritize recent reliable sources, distinguish verified facts from uncertainty, and include source links in your answer. Respond in the user's language.",
-            input: searchInput,
-            tools: [{ type: "web_search" }],
-            tool_choice: "auto"
-          })
-        });
-        const result = await upstream.json();
-        if (!upstream.ok) return json({ error: result.error?.message || "Web Search provider request failed." }, 502);
-        const reply = result.output
-          ?.filter(item => item.type === "message")
-          .flatMap(item => item.content || [])
-          .filter(item => item.type === "output_text")
-          .map(item => item.text)
-          .join("\n")
-          .trim();
-        if (!reply) return json({ error: "Web Search returned no readable answer." }, 502);
-        return json({ reply, provider: "openai-web-search", searched: true });
       }
 
       // Prefer Cloudflare Workers AI: it has a daily free allocation on Workers Free.
