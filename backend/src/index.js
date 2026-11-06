@@ -255,13 +255,13 @@ export default {
           const html = await upstream.text();
           const decode = value => value.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "").trim();
           const results = [];
-          const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi;
+          const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
           let match;
           while ((match = pattern.exec(html)) && results.length < 6) {
             const href = match[1].replace(/&amp;/g, "&");
             const title = decode(match[2]);
             const after = html.slice(pattern.lastIndex, pattern.lastIndex + 1800);
-            const snippetMatch = after.match(/class="result__snippet"[^>]*>([\\s\\S]*?)<\\/div>/i);
+            const snippetMatch = after.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/div>/i);
             const snippet = snippetMatch ? decode(snippetMatch[1]) : "";
             if (title && /^https?:\\/\\//i.test(href)) results.push({ title, url: href, snippet });
           }
