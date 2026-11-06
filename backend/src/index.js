@@ -281,27 +281,7 @@ export default {
         return json({ reply, provider: "cloudflare-workers-ai" });
       }
 
-      // Keep OpenAI as an optional fallback for accounts that still configure it.
-      if (env.OPENAI_API_KEY) {
-        const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: env.OPENAI_MODEL || "gpt-4o-mini",
-            messages
-          })
-        });
-        const result = await upstream.json();
-        if (!upstream.ok) return json({ error: result.error?.message || "AI provider request failed." }, 502);
-        const reply = result.choices?.[0]?.message?.content;
-        if (!reply) return json({ error: "AI provider returned an empty response." }, 502);
-        return json({ reply, provider: "openai" });
-      }
-
-      return json({ error: "No AI provider is configured. Enable the Cloudflare Workers AI binding." }, 503);
+      return json({ error: "Free JANU mode needs the Cloudflare Workers AI binding. No paid OpenAI chat fallback was attempted." }, 503);
     } catch (error) {
       return json({ error: error?.message || "Could not reach the AI provider." }, 502);
     }
