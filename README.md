@@ -35,6 +35,12 @@ The app starts behind an owner sign-in screen. The login endpoint exchanges the 
 
 Never put provider API keys in browser code or commit them to Git.
 
+## Chat and web-search behavior
+
+The chat backend routes explicit user requests such as “web search”, “search online”, “वेब पर खोजो”, and “इंटरनेट पर सर्च करो” to the OpenAI Responses API with its built-in `web_search` tool. Ordinary chat continues to use the configured Workers AI or OpenAI chat provider. Web search requires a valid `OPENAI_API_KEY`, an API project with billing/access enabled for web search, and network access from the Worker. Search/tool charges and model token charges may apply. The feature is not considered live until the deployment succeeds and an owner-authenticated end-to-end search is tested.
+
+Real-time voice currently has a WebRTC connection path, but web-search tool use from within an active voice session still needs a separate Realtime tool/function-call integration. Fast response time depends on provider latency, network quality, and model load; no fixed instant-response guarantee is made.
+
 ## Current scope and honest limitations
 
 This is the initial application scaffold, not a finished production service. The 18+ switch is a conversation preference, not an age-verification system and not a way to bypass provider policies or legal safeguards. The Cyber Shield page includes defensive guidance, rule-based triage for manually submitted event descriptions, and a permission-confirmed test-plan builder. It does not inspect devices, ingest live logs, detect intrusions in real time, identify attackers, block IP addresses, monitor networks, or execute security tests.
